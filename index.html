@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Customer Call-ins Viewer (Editable)</title>
+
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Styles -->
+    <style>
+      /* --- CSS Reset (lite) --- */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      :root[data-theme="light"] {
+        --bg: #f7f8fb;
+        --surface: #ffffff;
+        --panel: #ffffff;
+        --card: #ffffff;
+        --muted: #5b6473;
+        --text: #111827;
+        --subtle: #6b7280;
+        --accent: #1673ff;
+        --accent-ink: #ffffff;
+        --border: #e6e9ef;
+        --border-subtle: #eef1f6;
+        --chip: #eef4ff;
+        --ok-bg: #e9f9ef;
+        --ok-fg: #1b7a3a;
+        --ok-br: #bfe8ce;
+        --warn-bg: #fff3e3;
+        --warn-fg: #8a4d03;
+        --warn-br: #ffd9a8;
+        --bad-bg: #ffebeb;
+        --bad-fg: #891616;
+        --bad-br: #ffc3c3;
+        --focus: #2563eb;
+        --shadow: 0 6px 24px rgba(16, 24, 40, 0.08);
+        --radius: 14px;
+      }
+      :root[data-theme="dark"] {
+        --bg: #0b0c10;
+        --surface: #0f1117;
+        --panel: #111317;
+        --card: #141824;
+        --muted: #aab2c0;
+        --text: #e8eef5;
+        --subtle: #98a1b3;
+        --accent: #5aa9ff;
+        --accent-ink: #071019;
+        --border: #1b2233;
+        --border-subtle: #1e2330;
+        --chip: #1b1f2a;
+        --ok-bg: #11361a;
+        --ok-fg: #95f3a9;
+        --ok-br: #1e5b2c;
+        --warn-bg: #341b00;
+        --warn-fg: #ffd39c;
+        --warn-br: #5c3700;
+        --bad-bg: #2a0c0c;
+        --bad-fg: #ff9e9e;
+        --bad-br: #4a1a1a;
+        --focus: #8ecbff;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        --radius: 14px;
+      }
+
+      /* Full message body */
+      .msg {
+        margin-top: 6px;
+        white-space: pre-wrap;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      /* --- Theme tokens --- */
+      :root {
+        --bg: #0b0c10;
+        --surface: #0f1117;
+        --panel: #111317;
+        --card: #141824;
+        --muted: #aab2c0;
+        --text: #e8eef5;
+        --subtle: #98a1b3;
+        --accent: #5aa9ff;
+        --accent-ink: #071019;
+        --border: #1b2233;
+        --border-subtle: #1e2330;
+        --chip: #1b1f2a;
+        --ok-bg: #11361a;
+        --ok-fg: #95f3a9;
+        --ok-br: #1e5b2c;
+        --warn-bg: #341b00;
+        --warn-fg: #ffd39c;
+        --warn-br: #5c3700;
+        --bad-bg: #2a0c0c;
+        --bad-fg: #ff9e9e;
+        --bad-br: #4a1a1a;
+        --focus: #8ecbff;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        --radius: 14px;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f7f8fb;
+          --surface: #ffffff;
+          --panel: #ffffff;
+          --card: #ffffff;
+          --muted: #5b6473;
+          --text: #111827;
+          --subtle: #6b7280;
+          --accent: #1673ff;
+          --accent-ink: #ffffff;
+          --border: #e6e9ef;
+          --border-subtle: #eef1f6;
+          --chip: #eef4ff;
+          --ok-bg: #e9f9ef;
+          --ok-fg: #1b7a3a;
+          --ok-br: #bfe8ce;
+          --warn-bg: #fff3e3;
+          --warn-fg: #8a4d03;
+          --warn-br: #ffd9a8;
+          --bad-bg: #ffebeb;
+          --bad-fg: #891616;
+          --bad-br: #ffc3c3;
+          --focus: #2563eb;
+          --shadow: 0 6px 24px rgba(16, 24, 40, 0.08);
+          --radius: 14px;
+        }
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          "Helvetica Neue", Arial, "Noto Sans";
+      }
+
+      /* --- Header --- */
+      header.site {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        backdrop-filter: blur(8px);
+        background: color-mix(in oklab, var(--bg) 78%, transparent);
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 16px 20px;
+      }
+      .brandline {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 12px;
+        align-items: center;
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+      }
+      .logo svg {
+        width: 22px;
+        height: 22px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      /* Inputs */
+      .input,
+      select,
+      button {
+        height: 40px;
+        border-radius: 10px;
+        font: inherit;
+      }
+      .input,
+      select {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+        padding: 0 12px;
+      }
+      .input::placeholder {
+        color: var(--subtle);
+      }
+      .search {
+        width: min(360px, 50vw);
+      }
+      select {
+        padding-right: 30px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--border);
+        background: var(--accent);
+        color: var(--accent-ink);
+        font-weight: 700;
+        padding: 0 14px;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+      }
+      .btn.ghost {
+        background: var(--surface);
+        color: var(--text);
+      }
+      .btn.danger {
+        background: #ef4444;
+        color: white;
+      }
+      .btn:focus-visible,
+      .input:focus-visible,
+      select:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      /* Main */
+      main {
+        padding: 18px 20px 36px;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 12px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .meta .dot {
+        width: 6px;
+        height: 6px;
+        background: var(--muted);
+        border-radius: 50%;
+        opacity: 0.6;
+      }
+
+      /* Views */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 14px;
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        cursor: pointer;
+      }
+      .rowtop {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+      .title {
+        font-weight: 800;
+        font-size: 16px;
+        letter-spacing: 0.2px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 8px 12px;
+      }
+      .k {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .v {
+        font-weight: 600;
+      }
+      .footer {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .tag {
+        font-size: 12px;
+        border: 1px dashed var(--border);
+        padding: 3px 8px;
+        border-radius: 999px;
+        color: var(--muted);
+        background: var(--chip);
+      }
+
+      .status {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+      }
+      .status.ok {
+        background: var(--ok-bg);
+        color: var(--ok-fg);
+        border-color: var(--ok-br);
+      }
+      .status.warn {
+        background: var(--warn-bg);
+        color: var(--warn-fg);
+        border-color: var(--warn-br);
+      }
+      .status.bad {
+        background: var(--bad-bg);
+        color: var(--bad-fg);
+        border-color: var(--bad-br);
+      }
+
+      /* Table */
+      .tableWrap {
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--panel);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+      }
+      thead th {
+        position: sticky;
+        top: 0;
+        background: color-mix(in oklab, var(--surface) 86%, transparent);
+        font-size: 12px;
+        color: var(--muted);
+        backdrop-filter: blur(6px);
+      }
+      th.sortable {
+        cursor: pointer;
+      }
+      th.sortable .sort {
+        opacity: 0.5;
+        margin-left: 4px;
+      }
+      tbody tr {
+        cursor: pointer;
+      }
+
+      /* Utilities */
+      .hide {
+        display: none !important;
+      }
+      .mono {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .spacer {
+        flex: 1;
+      }
+
+      /* Overlay (auth) */
+      #overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(3px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+      }
+      #overlay .sheet {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        max-width: 460px;
+        text-align: center;
+        box-shadow: var(--shadow);
+      }
+
+      /* Skeletons */
+      .skeleton {
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.06),
+          rgba(255, 255, 255, 0.12),
+          rgba(255, 255, 255, 0.06)
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.2s infinite linear;
+        border-radius: 8px;
+      }
+      @keyframes shimmer {
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
+      }
+      .s-card {
+        height: 140px;
+      }
+
+      /* Density toggle */
+      :root[data-density="compact"] .kv {
+        grid-template-columns: 100px 1fr;
+      }
+      :root[data-density="compact"] .card {
+        padding: 10px;
+      }
+      :root[data-density="compact"] .input,
+      :root[data-density="compact"] select,
+      :root[data-density="compact"] button {
+        height: 36px;
+      }
+
+      /* Theme toggle (manual) */
+      .themeIcon {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* Editor modal */
+      #editor {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 300;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(2px);
+      }
+      #editor .panel {
+        width: min(720px, 92vw);
+        max-height: 86vh;
+        overflow: auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 16px;
+      }
+      #editor h3 {
+        margin: 0 0 8px 0;
+      }
+      .form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .form label {
+        font-size: 12px;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 6px;
+      }
+      .form input[type="text"],
+      .form input[type="email"],
+      .form input[type="tel"],
+      .form input[type="date"],
+      .form textarea,
+      .form select {
+        width: 100%;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 10px 12px;
+        font: inherit;
+      }
+      .form textarea {
+        min-height: 88px;
+        grid-column: 1 / -1;
+      }
+      .editor-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+      .dirty-dot {
+        width: 8px;
+        height: 8px;
+        background: #f59e0b;
+        border-radius: 999px;
+        display: inline-block;
+        margin-left: 6px;
+        vertical-align: middle;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site" role="banner">
+      <div class="wrap">
+        <div class="brandline" aria-label="App header">
+          <div class="logo" aria-label="Customer Call-ins Viewer">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M4 12a8 8 0 1 1 16 0c0 3.528-2.133 6.552-5.132 7.657a1 1 0 0 1-.736-1.855C16.96 16.7 18 14.49 18 12a6 6 0 1 0-6 6 1 1 0 1 1 0 2 8 8 0 0 1-8-8Z"
+                fill="currentColor"
+              />
+            </svg>
+            <span>Customer Call-ins Viewer</span>
+            <span id="dirtyBadge" class="hide" title="Unsaved changes"
+              ><span class="dirty-dot"></span
+            ></span>
+          </div>
+          <div class="spacer"></div>
+          <div class="toolbar" role="group" aria-label="Primary controls">
+            <input
+              id="range"
+              class="input mono"
+              type="text"
+              value="Sheet1!A:Z"
+              aria-label="Sheet range"
+            />
+            <input
+              id="search"
+              class="input search"
+              type="search"
+              placeholder="Search across all fields…"
+              aria-label="Search"
+            />
+            <select id="viewMode" aria-label="View mode" class="input">
+              <option value="cards">Cards</option>
+              <option value="table">Table</option>
+            </select>
+            <button
+              id="densityBtn"
+              class="btn ghost"
+              title="Toggle density"
+              aria-pressed="false"
+            >
+              <span>Density</span>
+            </button>
+            <button id="themeBtn" class="btn ghost" title="Toggle theme">
+              <span>Theme</span>
+            </button>
+            <button id="signInBtn" class="btn ghost" style="display: none">
+              Authorize
+            </button>
+            <span class="mono" id="whoami" aria-live="polite">Signing in…</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap" role="main">
+      <div class="meta" aria-live="polite">
+        <span id="errors"></span>
+        <span class="dot"></span>
+        <span id="stats"></span>
+      </div>
+
+      <!-- Skeleton while loading -->
+      <div id="skeletons" class="grid">
+        <div class="card skeleton s-card"></div>
+        <div class="card skeleton s-card"></div>
+        <div class="card skeleton s-card"></div>
+      </div>
+
+      <div id="cards" class="grid hide" aria-label="Card view"></div>
+
+      <div
+        id="table"
+        class="tableWrap hide"
+        role="region"
+        aria-label="Table view"
+      >
+        <table aria-describedby="stats">
+          <thead id="thead"></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- Click-to-continue overlay (user gesture for popup) -->
+    <div
+      id="overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ovl-title"
+      aria-describedby="ovl-desc"
+    >
+      <div class="sheet">
+        <h2 id="ovl-title" style="margin: 0 0 8px 0; font-size: 18px">
+          Authorization needed
+        </h2>
+        <p id="ovl-desc" style="margin: 0 0 12px 0; color: var(--muted)">
+          Your browser blocked the Google sign-in popup. Click continue to grant
+          access to your sheet.
+        </p>
+        <button id="overlayBtn" class="btn" style="width: 100%">
+          Continue
+        </button>
+        <div class="mono" style="margin-top: 10px; color: var(--muted)">
+          Tip: allow pop-ups for this site.
+        </div>
+      </div>
+    </div>
+
+    <!-- Row Editor Modal -->
+    <div
+      id="editor"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="editorTitle"
+      aria-describedby="editorDesc"
+    >
+      <div class="panel">
+        <h3 id="editorTitle">Edit row</h3>
+        <div
+          id="editorDesc"
+          class="mono"
+          style="margin-bottom: 8px; color: var(--muted)"
+        >
+          Update values and click Save. Changes write back to the sheet.
+        </div>
+        <form id="editForm" class="form"></form>
+        <div class="editor-actions">
+          <button
+            id="deleteRowBtn"
+            class="btn danger"
+            type="button"
+            title="Clear row (sets cells to blank)"
+          >
+            Clear Row
+          </button>
+          <div class="spacer"></div>
+          <button id="cancelEdit" class="btn ghost" type="button">
+            Cancel
+          </button>
+          <button id="saveEdit" class="btn" type="submit">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ==== Constants (keep your original IDs) ====
+      const OAUTH_CLIENT_ID =
+        "134363577153-egnkn0tag5ois5nf90et9n8s1cfm0jdh.apps.googleusercontent.com"; // keep existing
+      // CHANGED: add write scope (spreadsheets) instead of readonly
+      const SCOPES =
+        "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email";
+      const SPREADSHEET_ID = "1PJ5e_2oV5mBzX-AjOue8m4WXaYRTVcK9lOSU25ni-ks";
+
+      // ==== State ====
+      let accessToken = null;
+      let tokenClient = null;
+      let userEmail = null;
+      let currentItems = [];
+      let currentHeaders = [];
+      let sortState = { key: null, dir: 1 }; // 1 asc, -1 desc
+      let editRowIndex = null; // 0-based index into currentItems
+      let originalRowSnapshot = null; // for dirty detection
+
+      // ==== Helpers ====
+      const $ = (sel) => document.querySelector(sel);
+      const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+      const escapeHtml = (s) =>
+        (s == null ? "" : String(s))
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      const setError = (msg) => {
+        $("#errors").textContent = msg || "";
+      };
+      const setStatus = (msg) => {
+        $("#stats").textContent = msg || "";
+      };
+      const show = (el) => el.classList.remove("hide");
+      const hide = (el) => el.classList.add("hide");
+      const debounce = (fn, ms = 200) => {
+        let t;
+        return (...args) => {
+          clearTimeout(t);
+          t = setTimeout(() => fn(...args), ms);
+        };
+      };
+
+      function formatDateOnly(iso) {
+        if (!iso) return "";
+        try {
+          const d = new Date(iso);
+          if (!isNaN(d.getTime())) {
+            return d.toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            });
+          }
+        } catch (_) {}
+        return iso;
+      }
+
+      // Column index -> letter (1 -> A)
+      function colToLetter(col) {
+        let s = "";
+        while (col > 0) {
+          let m = (col - 1) % 26;
+          s = String.fromCharCode(65 + m) + s;
+          col = Math.floor((col - m) / 26);
+        }
+        return s;
+      }
+
+      // ==== Token persistence helpers (client-side only) ====
+      function saveToken(tokenResponse) {
+        try {
+          const expiresIn =
+            tokenResponse && tokenResponse.expires_in
+              ? Number(tokenResponse.expires_in)
+              : 3600;
+          const payload = {
+            access_token: tokenResponse.access_token,
+            expires_at: Date.now() + expiresIn * 1000 - 15000,
+          };
+          localStorage.setItem("gis_token", JSON.stringify(payload));
+        } catch (_) {}
+      }
+      function loadToken() {
+        try {
+          const raw = localStorage.getItem("gis_token");
+          if (!raw) return null;
+          const t = JSON.parse(raw);
+          if (!t || !t.access_token || !t.expires_at) return null;
+          if (Date.now() >= t.expires_at) return null; // expired
+          return t;
+        } catch (_) {
+          return null;
+        }
+      }
+      function clearToken() {
+        try {
+          localStorage.removeItem("gis_token");
+        } catch (_) {}
+      }
+
+      async function onToken(tokenResponse) {
+        accessToken = tokenResponse.access_token;
+        saveToken(tokenResponse);
+        hideOverlay();
+        hideAuthButton();
+        await fetchUserInfo();
+        setStatus(
+          `Authorized${userEmail ? " as " + userEmail : ""}. Loading data…`
+        );
+        await loadData();
+      }
+
+      // ==== Auth Flow ====
+      window.onload = () => {
+        $("#signInBtn").addEventListener("click", requestConsent);
+        $("#overlayBtn").addEventListener("click", () => {
+          hideOverlay();
+          requestConsent();
+        });
+        $("#search").addEventListener("input", debounce(applySearch, 120));
+        $("#viewMode").addEventListener("change", onViewChange);
+        $("#densityBtn").addEventListener("click", toggleDensity);
+        $("#themeBtn").addEventListener("click", toggleTheme);
+
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: OAUTH_CLIENT_ID,
+          scope: SCOPES,
+          callback: onToken,
+        });
+
+        // Restore prefs
+        const prefView = localStorage.getItem("viewMode");
+        if (prefView) $("#viewMode").value = prefView;
+        const prefDensity = localStorage.getItem("density");
+        if (prefDensity === "compact")
+          document.documentElement.setAttribute("data-density", "compact");
+        const prefTheme = localStorage.getItem("theme");
+        document.documentElement.dataset.theme = prefTheme || "light";
+
+        // Try saved access token first
+        const saved = loadToken();
+        if (saved) {
+          accessToken = saved.access_token;
+          hideOverlay();
+          hideAuthButton();
+          fetchUserInfo().catch(() => {});
+          setStatus("Using saved session. Loading data…");
+          loadData();
+        } else {
+          requestSilent();
+          setTimeout(() => {
+            if (!accessToken) {
+              showOverlay();
+              showAuthButton();
+              setStatus("Authorization required. Click Continue.");
+            }
+          }, 900);
+        }
+      };
+
+      function requestSilent() {
+        try {
+          tokenClient.requestAccessToken({ prompt: "" });
+        } catch (e) {
+          /* ignore */
+        }
+      }
+      function requestConsent() {
+        try {
+          tokenClient.requestAccessToken({ prompt: "consent" });
+        } catch (e) {
+          showOverlay();
+        }
+      }
+
+      async function fetchUserInfo() {
+        try {
+          const r = await fetch(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          if (r.ok) {
+            const json = await r.json();
+            userEmail = json.email;
+            $("#whoami").textContent = userEmail || "Authorized";
+          }
+        } catch (_) {
+          $("#whoami").textContent = "Authorized";
+        }
+      }
+
+      // ==== Data ====
+      async function loadData() {
+        setError("");
+        const range = $("#range").value.trim() || "Sheet1!A:Z";
+        if (!accessToken) {
+          showOverlay();
+          showAuthButton();
+          return setError("Please authorize to load data.");
+        }
+        setStatus("Loading…");
+        show($("#skeletons"));
+        hide($("#cards"));
+        hide($("#table"));
+        try {
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(
+            range
+          )}?majorDimension=ROWS`;
+          let res = await fetch(url, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (res.status === 401 || res.status === 403) {
+            try {
+              tokenClient.callback = onToken;
+              requestSilent();
+            } catch (e) {}
+            res = await fetch(url, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            if (res.status === 401 || res.status === 403) {
+              showOverlay();
+              showAuthButton();
+              return;
+            }
+          }
+          if (!res.ok)
+            throw new Error((await res.text()) || `HTTP ${res.status}`);
+          const data = await res.json();
+          handleValuesResponse(data);
+        } catch (err) {
+          console.error(err);
+          setError("Failed to load: " + err.message);
+        } finally {
+          hide($("#skeletons"));
+        }
+      }
+
+      function handleValuesResponse(data) {
+        const rows = data.values || [];
+        if (rows.length === 0) {
+          setError("No data found in that range.");
+          return;
+        }
+        const headers = rows[0];
+        const items = rows
+          .slice(1)
+          .map((r, i) => ({
+            __rowNumber: i + 2,
+            ...Object.fromEntries(headers.map((h, j) => [h, r[j] ?? ""])),
+          }));
+        currentItems = items;
+        currentHeaders = headers;
+        renderAll(items, headers);
+        setStatus(`Loaded ${items.length} rows, ${headers.length} columns.`);
+      }
+
+      // ==== Rendering ====
+      function renderAll(items, headers) {
+        drawCards(items);
+        drawTable(headers, items);
+        toggleView();
+      }
+
+      function drawCards(items) {
+        const grid = document.querySelector("#cards");
+        grid.innerHTML = "";
+        items.forEach((row, idx) => {
+          const card = document.createElement("article");
+          card.className = "card";
+          card.tabIndex = 0;
+          card.setAttribute("role", "article");
+          const hasOFS = row && ("Name" in row || "Customer" in row);
+          if (hasOFS) {
+            const name = row.Name || row.Customer || "Unnamed";
+            const invType = row.InventoryType || row["Inventory Type"] || "";
+            const invMethod =
+              row.InventoryMethod || row["Inventory Method"] || "";
+            const freq = row.HowFrequently || row["How Frequently"] || "";
+            const when = row.When || row["Preferred Time"] || row.Date || "";
+            const date = formatDateOnly(row.Date || "");
+            const phone = row.Phone || "";
+            const email = row.Email || "";
+            const addr = [row.Address, row.City, row.State, row.Zipcode]
+              .filter(Boolean)
+              .join(", ");
+            const message = (row.Message || row.Notes || "").toString();
+            const custNo = row["Customer Number"] || "";
+            const contactedBy = row["Contacted by"] || "";
+            const rate = row.Rate || "";
+            const tel = phone ? phone.replace(/[^0-9+]/g, "") : "";
+            const mail = email ? `mailto:${email}` : "";
+            const mkTag = (label, val) =>
+              val
+                ? `<span class="tag">${escapeHtml(label)}: ${escapeHtml(
+                    val
+                  )}</span>`
+                : "";
+            card.innerHTML = `
+              <div class="rowtop">
+                <div>
+                  <div class="title">${escapeHtml(name)}</div>
+                  <div class="row" style="margin-top:6px">
+                    ${
+                      invType
+                        ? `<span class="tag">${escapeHtml(invType)}</span>`
+                        : ""
+                    }
+                    ${
+                      freq ? `<span class="tag">${escapeHtml(freq)}</span>` : ""
+                    }
+                    ${
+                      invMethod
+                        ? `<span class="tag">${escapeHtml(invMethod)}</span>`
+                        : ""
+                    }
+                    ${
+                      when
+                        ? `<span class="status warn">${escapeHtml(when)}</span>`
+                        : ""
+                    }
+                  </div>
+                </div>
+                ${
+                  rate
+                    ? `<span class="status ok" title="Rating">${escapeHtml(
+                        rate
+                      )}</span>`
+                    : ""
+                }
+              </div>
+              <div class="kv" style="margin-top:6px">
+                <div class="k">Date</div><div class="v">${escapeHtml(
+                  date
+                )}</div>
+                <div class="k">Contact</div><div class="v">
+                  ${
+                    phone
+                      ? `<a href="tel:${tel}" class="mono" style="text-decoration:none">${escapeHtml(
+                          phone
+                        )}</a>`
+                      : ""
+                  }
+                  ${phone && email ? " · " : ""}
+                  ${
+                    email
+                      ? `<a href="${mail}" class="mono" style="text-decoration:none">${escapeHtml(
+                          email
+                        )}</a>`
+                      : ""
+                  }
+                </div>
+                <div class="k">Location</div><div class="v">${escapeHtml(
+                  addr
+                )}</div>
+                <div class="k">Customer #</div><div class="v">${escapeHtml(
+                  custNo
+                )}</div>
+                <div class="k">Contacted By</div><div class="v">${escapeHtml(
+                  contactedBy
+                )}</div>
+              </div>
+              ${message ? `<div class="msg">${escapeHtml(message)}</div>` : ""}
+              <div class="footer">
+                ${mkTag("Type", invType)}
+                ${mkTag("Frequency", freq)}
+                ${mkTag("Method", invMethod)}
+                ${mkTag("When", when)}
+                ${
+                  custNo
+                    ? `<span class="tag mono">#${escapeHtml(custNo)}</span>`
+                    : ""
+                }
+              </div>`;
+          } else {
+            const topKeys = pickImportantKeys();
+            const title = row[topKeys[0]] || row[topKeys[1]] || "Untitled";
+            const status = inferStatus(row);
+            card.innerHTML = `
+              <div class="rowtop">
+                <div class="title">${escapeHtml(title)}</div>
+                ${
+                  status
+                    ? `<span class="status ${status.variant}">${escapeHtml(
+                        status.label
+                      )}</span>`
+                    : ""
+                }
+              </div>
+              <div class="kv">
+                ${topKeys
+                  .map(
+                    (k) =>
+                      `<div class=\"k\">${escapeHtml(
+                        k
+                      )}</div><div class=\"v\">${escapeHtml(
+                        row[k] || ""
+                      )}</div>`
+                  )
+                  .join("")}
+              </div>
+              <div class="footer">
+                ${Object.entries(row)
+                  .slice(0, 8)
+                  .map(([k, v]) =>
+                    v && v.length < 28
+                      ? `<span class=\"tag\">${escapeHtml(k)}: ${escapeHtml(
+                          v
+                        )}</span>`
+                      : ""
+                  )
+                  .join("")}
+              </div>`;
+          }
+          card.addEventListener("click", () => openEditor(row, idx));
+          grid.appendChild(card);
+        });
+      }
+
+      function drawTable(headers, items) {
+        const thead = $("#thead");
+        const tbody = $("#tbody");
+        thead.innerHTML = `<tr>${headers
+          .map(
+            (h) =>
+              `<th class="sortable" data-key="${escapeHtml(h)}">${escapeHtml(
+                h
+              )} <span class="sort">↕</span></th>`
+          )
+          .join("")}</tr>`;
+        tbody.innerHTML = items
+          .map(
+            (row, idx) =>
+              `<tr data-i="${idx}">${headers
+                .map(
+                  (h) =>
+                    `<td>${escapeHtml(
+                      h.toLowerCase() === "date"
+                        ? formatDateOnly(row[h] || "")
+                        : row[h] || ""
+                    )}</td>`
+                )
+                .join("")}</tr>`
+          )
+          .join("");
+        $$("th.sortable").forEach((th) =>
+          th.addEventListener("click", () => sortBy(th.dataset.key))
+        );
+        $$("#tbody tr").forEach((tr) =>
+          tr.addEventListener("click", () => {
+            const i = Number(tr.getAttribute("data-i"));
+            openEditor(currentItems[i], i);
+          })
+        );
+      }
+
+      // ==== Interactions ====
+      function applySearch() {
+        const q = $("#search").value.trim().toLowerCase();
+        const items = currentItems || [];
+        const filtered = !q
+          ? items
+          : items.filter((row) =>
+              Object.values(row).some((v) =>
+                (v || "").toLowerCase().includes(q)
+              )
+            );
+        renderAll(filtered, currentHeaders);
+        setStatus(
+          q
+            ? `Filtered to ${filtered.length} rows.`
+            : `Loaded ${items.length} rows, ${currentHeaders.length} columns.`
+        );
+      }
+
+      function onViewChange() {
+        const mode = $("#viewMode").value;
+        localStorage.setItem("viewMode", mode);
+        toggleView();
+      }
+      function toggleView() {
+        const mode = $("#viewMode").value;
+        const cards = $("#cards");
+        const table = $("#table");
+        if (mode === "cards") {
+          show(cards);
+          hide(table);
+        } else {
+          hide(cards);
+          show(table);
+        }
+      }
+
+      function pickImportantKeys() {
+        const headers = (currentHeaders || []).map((h) => h.toLowerCase());
+        const candidates = [
+          ["Customer", "Client", "Name", "Caller", "Company", "Account"],
+          ["Date", "Timestamp", "Created", "Call Date"],
+          ["Issue", "Topic", "Reason", "Subject", "Notes"],
+          ["Owner", "Assignee", "Agent"],
+        ];
+        const chosen = [];
+        for (const group of candidates) {
+          const found = group.find((k) => headers.includes(k.toLowerCase()));
+          if (found) chosen.push(found);
+        }
+        if (chosen.length < 3) {
+          const raw = currentHeaders || [];
+          for (const h of raw) {
+            if (!chosen.includes(h)) chosen.push(h);
+            if (chosen.length >= 4) break;
+          }
+        }
+        return chosen.slice(0, 4);
+      }
+
+      function inferStatus(row) {
+        const raw = (row.Status || row.state || row.Stage || "").toString();
+        const val = raw.toLowerCase();
+        if (!val) return null;
+        if (/done|closed|resolved|complete|success/.test(val))
+          return { label: raw || "Resolved", variant: "ok" };
+        if (/waiting|pending|blocked|follow/.test(val))
+          return { label: raw || "Pending", variant: "warn" };
+        if (/escalat|urgent|sev|outage|fail|error/.test(val))
+          return { label: raw || "Escalated", variant: "bad" };
+        return { label: raw || val, variant: "warn" };
+      }
+
+      function sortBy(key) {
+        const items = [...(currentItems || [])];
+        if (sortState.key === key) sortState.dir *= -1;
+        else {
+          sortState.key = key;
+          sortState.dir = 1;
+        }
+        items.sort((a, b) => {
+          const av = (a[key] ?? "").toString();
+          const bv = (b[key] ?? "").toString();
+          const na = Number(av.replace(/[^0-9.\-]/g, ""));
+          const nb = Number(bv.replace(/[^0-9.\-]/g, ""));
+          const bothNums =
+            !Number.isNaN(na) && !Number.isNaN(nb) && av !== "" && bv !== "";
+          if (bothNums) return (na - nb) * sortState.dir;
+          if (/^date$/i.test(key)) {
+            const da = new Date(av);
+            const db = new Date(bv);
+            if (!isNaN(da) && !isNaN(db)) return (da - db) * sortState.dir;
+          }
+          return av.localeCompare(bv) * sortState.dir;
+        });
+        renderAll(items, currentHeaders);
+      }
+
+      function showAuthButton() {
+        $("#signInBtn").style.display = "inline-flex";
+      }
+      function hideAuthButton() {
+        $("#signInBtn").style.display = "none";
+      }
+      function showOverlay() {
+        $("#overlay").style.display = "flex";
+      }
+      function hideOverlay() {
+        $("#overlay").style.display = "none";
+      }
+
+      function toggleDensity() {
+        const root = document.documentElement;
+        const now =
+          root.getAttribute("data-density") === "compact"
+            ? "comfortable"
+            : "compact";
+        if (now === "compact") root.setAttribute("data-density", "compact");
+        else root.removeAttribute("data-density");
+        localStorage.setItem(
+          "density",
+          now === "compact" ? "compact" : "comfortable"
+        );
+      }
+      function toggleTheme() {
+        const root = document.documentElement;
+        const cur = root.dataset.theme || "auto";
+        const next =
+          cur === "dark" ? "light" : cur === "light" ? "auto" : "dark";
+        root.dataset.theme = next;
+        localStorage.setItem("theme", next);
+      }
+
+      // Optional: Reload when pressing Enter in range field
+      $("#range").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") loadData();
+      });
+
+      // ==== EDITOR ====
+      function openEditor(row, index) {
+        editRowIndex = index;
+        originalRowSnapshot = JSON.stringify(row);
+        const form = $("#editForm");
+        form.innerHTML = "";
+        $("#editorTitle").textContent = `Edit row ${
+          row.__rowNumber || index + 2
+        }`;
+
+        // Build inputs in header order; keep types lightweight
+        (currentHeaders || []).forEach((h) => {
+          const keyLower = h.toLowerCase();
+          const wrap = document.createElement("div");
+          let control;
+          const val = row[h] || "";
+          const isLong = /message|notes|description|detail/i.test(h);
+          const isDate = /^date$/i.test(h);
+          wrap.innerHTML = `<label>${escapeHtml(h)}</label>`;
+          if (isLong) {
+            control = document.createElement("textarea");
+            control.name = h;
+            control.value = val;
+          } else if (isDate) {
+            control = document.createElement("input");
+            control.type = "date";
+            control.name = h; // best effort parse
+            const d = new Date(val);
+            if (!isNaN(d)) {
+              const yyyy = d.getFullYear();
+              const mm = String(d.getMonth() + 1).padStart(2, "0");
+              const dd = String(d.getDate()).padStart(2, "0");
+              control.value = `${yyyy}-${mm}-${dd}`;
+            }
+          } else if (/email/i.test(h)) {
+            control = document.createElement("input");
+            control.type = "email";
+            control.name = h;
+            control.value = val;
+          } else if (/phone|tel/i.test(h)) {
+            control = document.createElement("input");
+            control.type = "tel";
+            control.name = h;
+            control.value = val;
+          } else {
+            control = document.createElement("input");
+            control.type = "text";
+            control.name = h;
+            control.value = val;
+          }
+          control.addEventListener("input", markDirtyBadge);
+          wrap.appendChild(control);
+          form.appendChild(wrap);
+        });
+
+        // Wire actions
+        $("#cancelEdit").onclick = closeEditor;
+        $("#saveEdit").onclick = (e) => {
+          e.preventDefault();
+          saveEditor();
+        };
+        $("#deleteRowBtn").onclick = clearRow;
+        $("#editor").style.display = "flex";
+      }
+
+      function closeEditor() {
+        $("#editor").style.display = "none";
+        editRowIndex = null;
+        originalRowSnapshot = null;
+        hide($("#dirtyBadge"));
+      }
+
+      function collectEditorValues() {
+        const form = $("#editForm");
+        const out = {};
+        (currentHeaders || []).forEach((h) => {
+          const input = form.querySelector(`[name="${CSS.escape(h)}"]`);
+          if (!input) return;
+          let v = input.value;
+          if (input.type === "date" && v) {
+            // keep USER_ENTERED friendly date string
+            try {
+              const d = new Date(v + "T00:00:00");
+              if (!isNaN(d)) v = d.toLocaleDateString("en-US");
+            } catch (_) {}
+          }
+          out[h] = v;
+        });
+        return out;
+      }
+
+      async function saveEditor() {
+        if (editRowIndex == null) return;
+        const updated = collectEditorValues();
+        const rowNumber =
+          currentItems[editRowIndex].__rowNumber || editRowIndex + 2; // header row = 1
+        const sheetName =
+          ($("#range").value.trim() || "Sheet1!A:Z").split("!")[0] || "Sheet1";
+        const endCol = colToLetter(currentHeaders.length);
+        const range = `${sheetName}!A${rowNumber}:${endCol}${rowNumber}`;
+        const rowArray = currentHeaders.map((h) => updated[h] ?? "");
+
+        setStatus("Saving…");
+        try {
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(
+            range
+          )}?valueInputOption=USER_ENTERED`;
+          let res = await fetch(url, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              range,
+              majorDimension: "ROWS",
+              values: [rowArray],
+            }),
+          });
+          if (res.status === 401 || res.status === 403) {
+            try {
+              tokenClient.callback = onToken;
+              requestSilent();
+            } catch (e) {}
+            res = await fetch(url, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                range,
+                majorDimension: "ROWS",
+                values: [rowArray],
+              }),
+            });
+          }
+          if (!res.ok)
+            throw new Error((await res.text()) || `HTTP ${res.status}`);
+          // Optimistic update in UI
+          currentItems[editRowIndex] = { __rowNumber: rowNumber, ...updated };
+          renderAll(currentItems, currentHeaders);
+          setStatus(`Saved row ${rowNumber}.`);
+          closeEditor();
+        } catch (err) {
+          console.error(err);
+          setError("Failed to save: " + err.message);
+        }
+      }
+
+      async function clearRow() {
+        if (editRowIndex == null) return;
+        const rowNumber =
+          currentItems[editRowIndex].__rowNumber || editRowIndex + 2;
+        if (!confirm(`Clear all cells in row ${rowNumber}?`)) return;
+        const sheetName =
+          ($("#range").value.trim() || "Sheet1!A:Z").split("!")[0] || "Sheet1";
+        const endCol = colToLetter(currentHeaders.length);
+        const range = `${sheetName}!A${rowNumber}:${endCol}${rowNumber}`;
+        setStatus("Clearing…");
+        try {
+          const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(
+            range
+          )}:clear`;
+          let res = await fetch(url, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (res.status === 401 || res.status === 403) {
+            try {
+              tokenClient.callback = onToken;
+              requestSilent();
+            } catch (e) {}
+            res = await fetch(url, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+          }
+          if (!res.ok)
+            throw new Error((await res.text()) || `HTTP ${res.status}`);
+          // Blank in UI
+          const blank = Object.fromEntries(currentHeaders.map((h) => [h, ""]));
+          currentItems[editRowIndex] = { __rowNumber: rowNumber, ...blank };
+          renderAll(currentItems, currentHeaders);
+          setStatus(`Cleared row ${rowNumber}.`);
+          closeEditor();
+        } catch (err) {
+          console.error(err);
+          setError("Failed to clear: " + err.message);
+        }
+      }
+
+      function markDirtyBadge() {
+        try {
+          const now = JSON.stringify(collectEditorValues());
+          if (now !== originalRowSnapshot) {
+            show($("#dirtyBadge"));
+          } else {
+            hide($("#dirtyBadge"));
+          }
+        } catch (_) {}
+      }
+    </script>
+  </body>
+</html>
