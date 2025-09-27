@@ -747,11 +747,16 @@
               : 3600;
           const payload = {
             access_token: tokenResponse.access_token,
+            // Slight early expiration buffer is already in your code (−15s),
+            // which is fine; we’ll still refresh 5 minutes before this value.
             expires_at: Date.now() + expiresIn * 1000 - 15000,
           };
           localStorage.setItem("gis_token", JSON.stringify(payload));
+          return payload; // <— optional: lets you schedule immediately
         } catch (_) {}
+        return null;
       }
+
       function loadToken() {
         try {
           const raw = localStorage.getItem("gis_token");
@@ -773,6 +778,15 @@
       async function onToken(tokenResponse) {
         accessToken = tokenResponse.access_token;
         saveToken(tokenResponse);
+
+        // NEW: schedule proactive refresh using the stored expiry
+        try {
+          const saved = loadToken();
+          if (saved && saved.expires_at) {
+            scheduleTokenRefresh(saved.expires_at);
+          }
+        } catch (_) {}
+
         hideOverlay();
         hideAuthButton();
         await fetchUserInfo();
@@ -781,7 +795,6 @@
         );
         await loadData();
       }
-
       // ==== Auth Flow ====
       window.onload = () => {
         $("#signInBtn").addEventListener("click", requestConsent);
@@ -813,6 +826,12 @@
         const saved = loadToken();
         if (saved) {
           accessToken = saved.access_token;
+
+          // NEW: schedule proactive refresh on boot
+          if (saved.expires_at) {
+            scheduleTokenRefresh(saved.expires_at);
+          }
+
           hideOverlay();
           hideAuthButton();
           fetchUserInfo().catch(() => {});
@@ -914,12 +933,10 @@
           return;
         }
         const headers = rows[0];
-        const items = rows
-          .slice(1)
-          .map((r, i) => ({
-            __rowNumber: i + 2,
-            ...Object.fromEntries(headers.map((h, j) => [h, r[j] ?? ""])),
-          }));
+        const items = rows.slice(1).map((r, i) => ({
+          __rowNumber: i + 2,
+          ...Object.fromEntries(headers.map((h, j) => [h, r[j] ?? ""])),
+        }));
         currentItems = items;
         currentHeaders = headers;
         renderAll(items, headers);
@@ -1465,6 +1482,61 @@
           }
         } catch (_) {}
       }
+    </script>
+    <script>
+      // === Proactive refresh additions ===
+      let refreshTimer = null;
+
+      // Clear any pending refresh timer
+      function clearRefreshTimer() {
+        if (refreshTimer) {
+          clearTimeout(refreshTimer);
+          refreshTimer = null;
+        }
+      }
+
+      // Schedule a silent refresh a little before expiry
+      function scheduleTokenRefresh(expiresAtMs) {
+        clearRefreshTimer();
+        if (!expiresAtMs) return;
+
+        // Refresh 5 minutes early (with clamping)
+        const REFRESH_EARLY_MS = 5 * 60 * 1000;
+        const now = Date.now();
+        let delay = Math.max(10_000, expiresAtMs - now - REFRESH_EARLY_MS); // at least 10s
+        refreshTimer = setTimeout(() => {
+          // Silent refresh: no consent prompt
+          try {
+            tokenClient.callback = onToken; // reuse your existing onToken()
+            tokenClient.requestAccessToken({ prompt: "" });
+          } catch (_) {
+            // If silent refresh throws, we’ll try again on next API call or visibility change
+          }
+        }, delay);
+      }
+
+      // Try a just-in-time refresh if we’re close to expiry (e.g., when tab becomes visible)
+      function refreshIfNearExpiry() {
+        try {
+          const raw = localStorage.getItem("gis_token");
+          if (!raw) return;
+          const t = JSON.parse(raw);
+          if (!t || !t.expires_at) return;
+          const now = Date.now();
+          // If less than 2 minutes left, refresh now
+          if (t.expires_at - now <= 2 * 60 * 1000) {
+            tokenClient.callback = onToken;
+            tokenClient.requestAccessToken({ prompt: "" });
+          }
+        } catch (_) {}
+      }
+
+      // Hook: when the tab becomes active again, top up the token if it’s near expiry
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          refreshIfNearExpiry();
+        }
+      });
     </script>
   </body>
 </html>
