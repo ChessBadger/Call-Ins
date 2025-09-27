@@ -519,6 +519,31 @@
         margin-left: 6px;
         vertical-align: middle;
       }
+
+      /* Kanban */
+      #kanban {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 14px;
+      }
+      .kanCol {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 10px;
+        box-shadow: var(--shadow);
+      }
+      .kanHead {
+        font-weight: 800;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .kanCount {
+        font-size: 12px;
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -556,6 +581,7 @@
             <select id="viewMode" aria-label="View mode" class="input">
               <option value="cards">Cards</option>
               <option value="table">Table</option>
+              <option value="kanban">Kanban</option>
             </select>
             <button
               id="densityBtn"
@@ -584,6 +610,23 @@
         <span id="stats"></span>
       </div>
 
+      <!-- QUICK FILTERS -->
+      <div id="filters" class="row" style="margin: 12px 0">
+        <select id="fType" class="input" aria-label="Filter by Type">
+          <option value="">All Types</option>
+        </select>
+        <select id="fFreq" class="input" aria-label="Filter by Frequency">
+          <option value="">All Frequencies</option>
+        </select>
+        <select id="fBy" class="input" aria-label="Filter by Contacted By">
+          <option value="">All Contacts</option>
+        </select>
+        <select id="fWhen" class="input" aria-label="Filter by When">
+          <option value="">Any Time</option>
+        </select>
+        <button id="clearFilters" class="btn ghost" type="button">Clear</button>
+      </div>
+
       <!-- Skeleton while loading -->
       <div id="skeletons" class="grid">
         <div class="card skeleton s-card"></div>
@@ -592,6 +635,7 @@
       </div>
 
       <div id="cards" class="grid hide" aria-label="Card view"></div>
+      <div id="kanban" class="hide" aria-label="Kanban view"></div>
 
       <div
         id="table"
@@ -686,6 +730,9 @@
       let editRowIndex = null; // 0-based index into currentItems
       let originalRowSnapshot = null; // for dirty detection
 
+      // ---- Filters ----
+      const filterState = { type: "", freq: "", by: "", when: "" };
+
       // ==== Helpers ====
       const $ = (sel) => document.querySelector(sel);
       const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -711,6 +758,67 @@
           t = setTimeout(() => fn(...args), ms);
         };
       };
+
+      function uniqueSorted(values) {
+        return [...new Set(values.filter(Boolean))].sort((a, b) =>
+          a.localeCompare(b)
+        );
+      }
+      function getField(row, ...keys) {
+        for (const k of keys) if (row[k]) return row[k];
+        return "";
+      }
+      function buildFilters(items) {
+        const types = uniqueSorted(
+          items.map((r) =>
+            getField(r, "InventoryType", "Inventory Type", "Type")
+          )
+        );
+        const freqs = uniqueSorted(
+          items.map((r) =>
+            getField(r, "HowFrequently", "How Frequently", "Frequency")
+          )
+        );
+        const bys = uniqueSorted(
+          items.map((r) =>
+            getField(r, "Contacted by", "Contacted By", "Owner", "Assignee")
+          )
+        );
+        const whens = uniqueSorted(
+          items.map((r) => getField(r, "When", "Preferred Time"))
+        );
+
+        fillSelect($("#fType"), types);
+        fillSelect($("#fFreq"), freqs);
+        fillSelect($("#fBy"), bys);
+        fillSelect($("#fWhen"), whens);
+
+        $("#fType").onchange =
+          $("#fFreq").onchange =
+          $("#fBy").onchange =
+          $("#fWhen").onchange =
+            applyFilters;
+        $("#clearFilters").onclick = () => {
+          $("#fType").value =
+            $("#fFreq").value =
+            $("#fBy").value =
+            $("#fWhen").value =
+              "";
+          applyFilters();
+        };
+      }
+      function fillSelect(sel, opts) {
+        const cur = sel.value;
+        sel
+          .querySelectorAll("option:not(:first-child)")
+          .forEach((o) => o.remove());
+        opts.forEach((v) => {
+          const o = document.createElement("option");
+          o.value = o.textContent = v;
+          sel.appendChild(o);
+        });
+        if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+      }
 
       function formatDateOnly(iso) {
         if (!iso) return "";
@@ -747,8 +855,6 @@
               : 3600;
           const payload = {
             access_token: tokenResponse.access_token,
-            // Slight early expiration buffer is already in your code (−15s),
-            // which is fine; we’ll still refresh 5 minutes before this value.
             expires_at: Date.now() + expiresIn * 1000 - 15000,
           };
           localStorage.setItem("gis_token", JSON.stringify(payload));
@@ -779,7 +885,7 @@
         accessToken = tokenResponse.access_token;
         saveToken(tokenResponse);
 
-        // NEW: schedule proactive refresh using the stored expiry
+        // schedule proactive refresh using the stored expiry
         try {
           const saved = loadToken();
           if (saved && saved.expires_at) {
@@ -827,7 +933,7 @@
         if (saved) {
           accessToken = saved.access_token;
 
-          // NEW: schedule proactive refresh on boot
+          // schedule proactive refresh on boot
           if (saved.expires_at) {
             scheduleTokenRefresh(saved.expires_at);
           }
@@ -939,6 +1045,7 @@
         }));
         currentItems = items;
         currentHeaders = headers;
+        buildFilters(items); // build quick filters
         renderAll(items, headers);
         setStatus(`Loaded ${items.length} rows, ${headers.length} columns.`);
       }
@@ -947,6 +1054,7 @@
       function renderAll(items, headers) {
         drawCards(items);
         drawTable(headers, items);
+        drawKanban(items);
         toggleView();
       }
 
@@ -1026,7 +1134,11 @@
                     phone
                       ? `<a href="tel:${tel}" class="mono" style="text-decoration:none">${escapeHtml(
                           phone
-                        )}</a>`
+                        )}</a>
+                         <button type="button" class="btn ghost" style="height:24px;padding:0 8px;margin-left:6px"
+                           onclick="navigator.clipboard.writeText('${escapeHtml(
+                             phone
+                           )}')">Copy</button>`
                       : ""
                   }
                   ${phone && email ? " · " : ""}
@@ -1034,16 +1146,39 @@
                     email
                       ? `<a href="${mail}" class="mono" style="text-decoration:none">${escapeHtml(
                           email
-                        )}</a>`
+                        )}</a>
+                         <button type="button" class="btn ghost" style="height:24px;padding:0 8px;margin-left:6px"
+                           onclick="navigator.clipboard.writeText('${escapeHtml(
+                             email
+                           )}')">Copy</button>`
                       : ""
                   }
                 </div>
-                <div class="k">Location</div><div class="v">${escapeHtml(
-                  addr
-                )}</div>
-                <div class="k">Customer #</div><div class="v">${escapeHtml(
-                  custNo
-                )}</div>
+                <div class="k">Location</div><div class="v">
+                  ${
+                    addr
+                      ? `<a href="https://www.google.com/maps/search/?q=${encodeURIComponent(
+                          addr
+                        )}"
+   target="_blank" rel="noopener"
+   onclick="event.stopPropagation()">
+  ${escapeHtml(addr)}
+</a>
+`
+                      : ""
+                  }
+                </div>
+                <div class="k">Customer #</div><div class="v">
+                  ${escapeHtml(custNo)}
+                  ${
+                    custNo
+                      ? `<button type="button" class="btn ghost" style="height:24px;padding:0 8px;margin-left:6px"
+                           onclick="navigator.clipboard.writeText('${escapeHtml(
+                             custNo
+                           )}')">Copy</button>`
+                      : ""
+                  }
+                </div>
                 <div class="k">Contacted By</div><div class="v">${escapeHtml(
                   contactedBy
                 )}</div>
@@ -1100,7 +1235,10 @@
                   .join("")}
               </div>`;
           }
-          card.addEventListener("click", () => openEditor(row, idx));
+          card.addEventListener("click", (e) => {
+            if (isInteractive(e.target)) return; // <-- ignore link/button clicks
+            openEditor(row, idx);
+          });
           grid.appendChild(card);
         });
       }
@@ -1142,20 +1280,134 @@
         );
       }
 
+      function drawKanban(items) {
+        const groupKey = (row) =>
+          getField(row, "When", "Preferred Time") || "Unspecified";
+        const groups = new Map();
+        items.forEach((r) => {
+          const g = groupKey(r);
+          if (!groups.has(g)) groups.set(g, []);
+          groups.get(g).push(r);
+        });
+
+        const container = $("#kanban");
+        container.innerHTML = "";
+        [...groups.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .forEach(([name, rows]) => {
+            const col = document.createElement("section");
+            col.className = "kanCol";
+            col.innerHTML = `
+            <div class="kanHead">
+              <div>${escapeHtml(name)}</div>
+              <div class="kanCount">${rows.length}</div>
+            </div>
+            <div class="grid"></div>
+          `;
+            const grid = col.querySelector(".grid");
+            rows.forEach((row) => {
+              const card = document.createElement("article");
+              card.className = "card";
+              const title = row.Name || row.Customer || "Untitled";
+              const when = getField(row, "When", "Preferred Time");
+              const date = formatDateOnly(row.Date || "");
+              const invType = getField(
+                row,
+                "InventoryType",
+                "Inventory Type",
+                "Type"
+              );
+              const freq = getField(
+                row,
+                "HowFrequently",
+                "How Frequently",
+                "Frequency"
+              );
+              card.innerHTML = `
+              <div class="title">${escapeHtml(title)}</div>
+              <div class="row" style="margin-top:6px">
+                ${
+                  invType
+                    ? `<span class="tag">${escapeHtml(invType)}</span>`
+                    : ""
+                }
+                ${freq ? `<span class="tag">${escapeHtml(freq)}</span>` : ""}
+                ${
+                  when
+                    ? `<span class="status warn">${escapeHtml(when)}</span>`
+                    : ""
+                }
+              </div>
+              ${
+                date
+                  ? `<div class="mono" style="margin-top:6px">${escapeHtml(
+                      date
+                    )}</div>`
+                  : ""
+              }
+            `;
+              card.addEventListener("click", () =>
+                openEditor(row, currentItems.indexOf(row))
+              );
+              grid.appendChild(card);
+            });
+            container.appendChild(col);
+          });
+      }
+
       // ==== Interactions ====
+      function applyFilters() {
+        filterState.type = $("#fType").value.trim();
+        filterState.freq = $("#fFreq").value.trim();
+        filterState.by = $("#fBy").value.trim();
+        filterState.when = $("#fWhen").value.trim();
+        applySearch();
+      }
+
       function applySearch() {
         const q = $("#search").value.trim().toLowerCase();
         const items = currentItems || [];
-        const filtered = !q
-          ? items
-          : items.filter((row) =>
-              Object.values(row).some((v) =>
-                (v || "").toLowerCase().includes(q)
-              )
-            );
+        const filtered = items.filter((row) => {
+          const matchesText =
+            !q ||
+            Object.values(row).some((v) => (v || "").toLowerCase().includes(q));
+          if (!matchesText) return false;
+
+          const invType = getField(
+            row,
+            "InventoryType",
+            "Inventory Type",
+            "Type"
+          );
+          const freq = getField(
+            row,
+            "HowFrequently",
+            "How Frequently",
+            "Frequency"
+          );
+          const by = getField(
+            row,
+            "Contacted by",
+            "Contacted By",
+            "Owner",
+            "Assignee"
+          );
+          const when = getField(row, "When", "Preferred Time");
+
+          if (filterState.type && invType !== filterState.type) return false;
+          if (filterState.freq && freq !== filterState.freq) return false;
+          if (filterState.by && by !== filterState.by) return false;
+          if (filterState.when && when !== filterState.when) return false;
+          return true;
+        });
+
         renderAll(filtered, currentHeaders);
         setStatus(
-          q
+          q ||
+            filterState.type ||
+            filterState.freq ||
+            filterState.by ||
+            filterState.when
             ? `Filtered to ${filtered.length} rows.`
             : `Loaded ${items.length} rows, ${currentHeaders.length} columns.`
         );
@@ -1170,12 +1422,19 @@
         const mode = $("#viewMode").value;
         const cards = $("#cards");
         const table = $("#table");
+        const kanban = $("#kanban");
         if (mode === "cards") {
           show(cards);
           hide(table);
-        } else {
+          hide(kanban);
+        } else if (mode === "table") {
           hide(cards);
           show(table);
+          hide(kanban);
+        } else {
+          hide(cards);
+          hide(table);
+          show(kanban);
         }
       }
 
@@ -1537,6 +1796,12 @@
           refreshIfNearExpiry();
         }
       });
+
+      function isInteractive(el) {
+        return !!el.closest(
+          'a, button, input, textarea, select, [role="button"]'
+        );
+      }
     </script>
   </body>
 </html>
